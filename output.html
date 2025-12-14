@@ -22,11 +22,25 @@
             -webkit-user-select: none;
         }
 
+        /* --- VIDEO BACKGROUND --- */
+        .input_video {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            z-index: 0; /* Behind particles */
+            
+            /* Visual Styling for "Tech" look */
+            transform: scaleX(-1); /* Mirror effect */
+            opacity: 0.15; /* Keep it dark so particles glow */
+            filter: grayscale(100%) contrast(1.2);
+            pointer-events: none;
+        }
+
+        /* --- 3D CANVAS --- */
         #canvas-container { 
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; 
         }
-
-        video { display: none; } /* Completely hide video element */
 
         /* --- UI OVERLAY --- */
         #ui-layer {
@@ -57,7 +71,7 @@
             flex-wrap: wrap;
             background: linear-gradient(0deg, rgba(0,0,0,0.9) 0%, transparent 100%);
             gap: 10px;
-            padding-bottom: 40px; /* Extra space for mobile touch areas */
+            padding-bottom: 40px; 
         }
 
         button {
@@ -109,7 +123,6 @@
 
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* Mobile Adjustments */
         @media (max-width: 600px) {
             .hud-header { padding: 15px; }
             h3 { font-size: 1.2rem; }
@@ -145,13 +158,13 @@
     </div>
 
     <video class="input_video" playsinline></video>
+    
     <div id="canvas-container"></div>
 
 <script>
     // --- UTILS & MOBILE CHECK ---
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     
-    // Config based on device power
     const PARTICLE_COUNT = isMobile ? 1500 : 4000;
     const PARTICLE_SIZE = isMobile ? 0.35 : 0.25;
     const MAX_PIXEL_RATIO = Math.min(window.devicePixelRatio, 2); 
@@ -159,7 +172,8 @@
     // --- THREE.JS SETUP ---
     const container = document.getElementById('canvas-container');
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x050505, 0.035); 
+    // Use darker fog to blend with the video background
+    scene.fog = new THREE.FogExp2(0x000000, 0.035); 
 
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.z = 25;
@@ -167,9 +181,10 @@
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: !isMobile }); 
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(MAX_PIXEL_RATIO);
+    renderer.setClearColor(0x000000, 0); // Transparent background for renderer
     container.appendChild(renderer.domElement);
 
-    // --- PROCEDURAL TEXTURE GENERATION (Soft Glow) ---
+    // --- PROCEDURAL TEXTURE ---
     function getTexture() {
         const canvas = document.createElement('canvas');
         canvas.width = 32; canvas.height = 32;
@@ -185,7 +200,7 @@
         return texture;
     }
 
-    // --- BACKGROUND WIREFRAME (Visual Depth) ---
+    // --- BACKGROUND WIREFRAME ---
     const gridGeo = new THREE.IcosahedronGeometry(40, 1);
     const gridMat = new THREE.MeshBasicMaterial({ 
         color: 0x222222, 
@@ -204,7 +219,6 @@
     const colorObj = new THREE.Color();
 
     for (let i = 0; i < PARTICLE_COUNT; i++) {
-        // Initial Explosion Layout
         positions[i * 3] = (Math.random() - 0.5) * 100;
         positions[i * 3 + 1] = (Math.random() - 0.5) * 100;
         positions[i * 3 + 2] = (Math.random() - 0.5) * 100;
@@ -213,7 +227,6 @@
         targetPositions[i * 3 + 1] = positions[i * 3 + 1];
         targetPositions[i * 3 + 2] = positions[i * 3 + 2];
 
-        // Cyan / Purple Cyberpunk Gradient
         const hue = Math.random() > 0.5 ? 0.5 : 0.8; 
         colorObj.setHSL(hue, 1.0, 0.6);
         colors[i * 3] = colorObj.r;
@@ -237,7 +250,7 @@
     const particles = new THREE.Points(geometry, material);
     scene.add(particles);
 
-    // --- SHAPE GENERATORS ---
+    // --- SHAPES ---
     const shapes = {
         'Sphere': (i) => {
             const phi = Math.acos(-1 + (2 * i) / PARTICLE_COUNT);
@@ -246,36 +259,23 @@
             return { x: r * Math.cos(theta) * Math.sin(phi), y: r * Math.sin(theta) * Math.sin(phi), z: r * Math.cos(phi) };
         },
         'Heart': (i) => {
-            // Parametric Heart
             const t = (i / PARTICLE_COUNT) * Math.PI * 2;
             const x = 16 * Math.pow(Math.sin(t), 3);
             const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
             const z = (Math.random() - 0.5) * 5; 
-            // Scale and flip Y so it's upright
             return { x: x * 0.5, y: y * 0.5, z: z };
         },
         'Saturn': (i) => {
-            // 70% Ring, 30% Planet
             const isRing = i > PARTICLE_COUNT * 0.3;
             if(isRing) {
                 const angle = (i * 0.1);
                 const radius = 14 + Math.random() * 4;
-                // Add tilt to the ring for 3D effect
-                return {
-                    x: Math.cos(angle) * radius,
-                    y: Math.sin(angle) * radius * 0.2, // Flattened Y, slight tilt
-                    z: Math.sin(angle) * radius
-                };
+                return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius * 0.2, z: Math.sin(angle) * radius };
             } else {
-                // Planet body
                 const phi = Math.acos(-1 + (2 * i) / (PARTICLE_COUNT * 0.3));
                 const theta = Math.sqrt((PARTICLE_COUNT * 0.3) * Math.PI) * phi;
                 const r = 7;
-                return {
-                    x: r * Math.cos(theta) * Math.sin(phi),
-                    y: r * Math.sin(theta) * Math.sin(phi),
-                    z: r * Math.cos(phi)
-                };
+                return { x: r * Math.cos(theta) * Math.sin(phi), y: r * Math.sin(theta) * Math.sin(phi), z: r * Math.cos(phi) };
             }
         },
         'Galaxy': (i) => {
@@ -292,12 +292,10 @@
     };
 
     function setShape(shapeName) {
-        // Update Buttons UI
         document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
         const btn = document.getElementById(`btn-${shapeName}`);
         if(btn) btn.classList.add('active');
 
-        // Calculate Target Positions
         for (let i = 0; i < PARTICLE_COUNT; i++) {
             const pos = shapes[shapeName](i);
             targetPositions[i * 3] = pos.x;
@@ -305,7 +303,6 @@
             targetPositions[i * 3 + 2] = pos.z;
         }
 
-        // Color Burst Animation
         const targetHue = Math.random();
         const duration = 1000;
         const start = Date.now();
@@ -313,7 +310,6 @@
         function animateColor() {
             const now = Date.now();
             const progress = Math.min((now - start) / duration, 1);
-            
             for(let i=0; i<PARTICLE_COUNT; i++) {
                 colorObj.setHSL((targetHue + (i/PARTICLE_COUNT)*0.2)%1, 0.8, 0.5);
                 colors[i*3] = colorObj.r;
@@ -326,7 +322,6 @@
         animateColor();
     }
 
-    // Generate Buttons
     const btnContainer = document.getElementById('buttons');
     Object.keys(shapes).forEach(key => {
         const btn = document.createElement('button');
@@ -337,7 +332,7 @@
     });
     setShape('Sphere');
 
-    // --- INPUT HANDLING (Hand & Mouse) ---
+    // --- INPUT HANDLING ---
     let handX = 0, handY = 0;
     let pinchStrength = 1.0;
     let isHandDetected = false;
@@ -354,19 +349,19 @@
         if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
             isHandDetected = true;
             const landmarks = results.multiHandLandmarks[0];
-            
             const indexTip = landmarks[8];
             const thumbTip = landmarks[4];
             
-            // Map 0-1 to Scene Space
+            // Adjust coordinates to match mirror mode
+            // Since we flipped video with CSS, we treat X normally here 
+            // because MediaPipe gives normalized 0-1.
             const targetX = (0.5 - indexTip.x) * 30; 
             const targetY = (0.5 - indexTip.y) * 20;
 
-            handX += (targetX - handX) * 0.15; // Smoother lerp
+            handX += (targetX - handX) * 0.15; 
             handY += (targetY - handY) * 0.15;
 
             const distance = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y);
-            // Refined Pinch Logic
             const targetPinch = THREE.MathUtils.mapLinear(distance, 0.03, 0.15, 0.1, 1.5);
             pinchStrength += (targetPinch - pinchStrength) * 0.1;
         } else {
@@ -379,7 +374,6 @@
 
     const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
     
-    // Lower complexity for mobile to save battery/FPS
     hands.setOptions({
         maxNumHands: 1,
         modelComplexity: isMobile ? 0 : 1, 
@@ -388,7 +382,6 @@
     });
     hands.onResults(onResults);
 
-    // Camera Start Logic
     const startBtn = document.getElementById('start-btn');
     const statusText = document.getElementById('status-text');
 
@@ -397,7 +390,7 @@
         startBtn.style.display = 'none';
         const cameraUtils = new Camera(videoElement, {
             onFrame: async () => { await hands.send({image: videoElement}); },
-            width: isMobile ? 480 : 1280, // Lower res for mobile processing
+            width: isMobile ? 480 : 1280,
             height: isMobile ? 360 : 720
         });
         cameraUtils.start();
@@ -408,7 +401,7 @@
         startBtn.style.display = 'block';
     }, 1000);
 
-    // Mouse/Touch Fallback for Rotation
+    // Mouse Interactions
     document.addEventListener('mousedown', e => { isMouseDown = true; lastMouseX = e.clientX; });
     document.addEventListener('mouseup', () => isMouseDown = false);
     document.addEventListener('mousemove', e => {
@@ -422,7 +415,6 @@
         }
     });
 
-    // Touch Support
     document.addEventListener('touchstart', e => { isMouseDown = true; lastMouseX = e.touches[0].clientX; });
     document.addEventListener('touchend', () => isMouseDown = false);
     document.addEventListener('touchmove', e => {
@@ -444,7 +436,6 @@
         const positionsAttr = geometry.attributes.position;
         const array = positionsAttr.array;
 
-        // Rotate container
         particles.rotation.y += (sceneRotationY - particles.rotation.y) * 0.05;
         gridMesh.rotation.y -= 0.001;
         gridMesh.rotation.x += 0.0005;
@@ -458,12 +449,10 @@
             let ty = targetPositions[iy];
             let tz = targetPositions[iz];
 
-            // Apply Pinch
             tx *= pinchStrength;
             ty *= pinchStrength;
             tz *= pinchStrength;
 
-            // Hand Attraction
             const dx = handX - array[ix];
             const dy = handY - array[iy];
             const dist = Math.sqrt(dx*dx + dy*dy);
@@ -473,11 +462,9 @@
                 ty += dy * 0.5;
             }
 
-            // Organic Noise
             tx += Math.sin(time * 1.5 + i * 0.1) * 0.2;
             ty += Math.cos(time * 1.2 + i * 0.1) * 0.2;
 
-            // Lerp
             array[ix] += (tx - array[ix]) * 0.08;
             array[iy] += (ty - array[iy]) * 0.08;
             array[iz] += (tz - array[iz]) * 0.08;
